@@ -1,0 +1,31 @@
+{
+  "name": "liquid-glass-fences",
+  "version": "1.0.0",
+  "description": "Liquid glass desktop fences overlay for macOS & Windows",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build": "electron-builder"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0"
+  },
+  "devDependencies": {
+    "electron": "28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.liquidglass.fences",
+    "productName": "Liquid Glass Fences",
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "target": ["nsis", "portable"]
+    },
+    "files": ["main.js", "preload.js", "src/**/*"]
+  }
+}
