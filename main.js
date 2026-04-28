@@ -1,70 +1,13 @@
-const { app, BrowserWindow, ipcMain, screen, shell, Tray, Menu, globalShortcut, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, shell } = require('electron');
 const path = require('path');
-const fs = require('fs');
-const os = require('os');
-const Store = require('electron-store');
 
-const store = new Store();
+const { createTray, toggleWindow } = require('./src/main/tray');
+const { registerShortcuts, unregisterShortcuts } = require('./src/main/shortcuts');
+const { loadFences, saveFences, loadSettings, saveSettings, getAutoStart, setAutoLaunch } = require('./src/model/manager');
+const { scanApps } = require('./src/util/apps');
+
 let mainWindow;
-let tray;
-let isLocked = false;
 
-// ── App scanning ──────────────────────────────────────────────────────────────
-function scanApps() {
-  const platform = process.platform;
-  const results = [];
-
-  if (platform === 'darwin') {
-    const dirs = ['/Applications', path.join(os.homedir(), 'Applications')];
-    for (const dir of dirs) {
-      if (!fs.existsSync(dir)) continue;
-      try {
-        fs.readdirSync(dir).forEach(file => {
-          if (file.endsWith('.app') && !file.startsWith('.')) {
-            results.push({ name: file.replace('.app', ''), appPath: path.join(dir, file) });
-          }
-        });
-      } catch (e) {}
-    }
-  }
-
-  if (platform === 'win32') {
-    const dirs = [
-      'C:\\Program Files',
-      'C:\\Program Files (x86)',
-      path.join(process.env.APPDATA || '', 'Microsoft\\Windows\\Start Menu\\Programs'),
-      path.join(process.env.PROGRAMDATA || '', 'Microsoft\\Windows\\Start Menu\\Programs'),
-    ];
-    function scanDir(dir, depth = 0) {
-      if (depth > 2 || !fs.existsSync(dir)) return;
-      try {
-        fs.readdirSync(dir).forEach(file => {
-          const full = path.join(dir, file);
-          try {
-            const stat = fs.statSync(full);
-            if (stat.isDirectory() && depth < 2) {
-              scanDir(full, depth + 1);
-            } else if (file.endsWith('.exe') || file.endsWith('.lnk')) {
-              const name = file.replace(/\.(exe|lnk)$/, '');
-              if (!name.match(/uninstall|setup|install|update|helper|crash|redist/i)) {
-                results.push({ name, appPath: full });
-              }
-            }
-          } catch (e) {}
-        });
-      } catch (e) {}
-    }
-    dirs.forEach(d => scanDir(d));
-  }
-
-  // Deduplicate by name, sort alphabetically
-  const seen = new Set();
-  return results
-    .filter(a => { if (seen.has(a.name.toLowerCase())) return false; seen.add(a.name.toLowerCase()); return true; })
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-// ── Window ────────────────────────────────────────────────────────────────────
 function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
 
@@ -87,7 +30,7 @@ function createWindow() {
   });
 
   if (process.platform === 'darwin') mainWindow.setWindowButtonVisibility(false);
-  mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+  mainWindow.loadFile(path.join(__dirname, 'src', 'renderer', 'index.html'));
   mainWindow.setIgnoreMouseEvents(false);
   mainWindow.on('closed', () => { mainWindow = null; });
   mainWindow.on('close', e => {
@@ -99,87 +42,37 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
+
+  createTray(mainWindow);
+  registerShortcuts(toggleWindow);
+  setAutoLaunch(true);
 }
 
-// ── Tray ─────────────────────────────────────────────────────────────────────
-function createTray() {
-  const iconPath = path.join(__dirname, 'src', 'tray-icon.png');
-  let trayIcon;
-
-  if (fs.existsSync(iconPath)) {
-    trayIcon = nativeImage.createFromPath(iconPath);
-  } else {
-    trayIcon = nativeImage.createEmpty();
-  }
-
-  if (process.platform === 'win32') {
-    trayIcon = trayIcon.resize({ width: 16, height: 16 });
-  }
-
-  tray = new Tray(trayIcon);
-  tray.setToolTip('Liquid Glass Fences');
-
-  const contextMenu = Menu.buildFromTemplate([
-    { label: 'Show/Hide', click: () => toggleWindow() },
-    { type: 'separator' },
-    { label: 'Always on Top', type: 'checkbox', checked: false, click: (item) => {
-      if (mainWindow) mainWindow.setAlwaysOnTop(item.checked);
-    }},
-    { type: 'separator' },
-    { label: 'Quit', click: () => {
-      app.isQuitting = true;
-      app.quit();
-    }}
-  ]);
-
-  tray.setContextMenu(contextMenu);
-  tray.on('click', () => toggleWindow());
-}
-
-function toggleWindow() {
-  if (mainWindow) {
-    if (mainWindow.isVisible()) {
-      mainWindow.hide();
-    } else {
-      mainWindow.show();
-    }
-  }
-}
-
-// ── Global Shortcut ─────────────────────────────────────────────────────────
-function registerGlobalShortcut() {
-  const ret = globalShortcut.register('CommandOrControl+Shift+F', () => {
-    toggleWindow();
-  });
-
-  if (!ret) {
-    console.log('Global shortcut registration failed');
-  }
-}
-
-// ── Auto-start ───────────────────────────────────────────────────────────────
-function setAutoLaunch(enable) {
-  app.setLoginItemSettings({
-    openAtLogin: enable,
-    path: process.execPath,
-    args: ['--hidden']
-  });
-}
-
-// ── IPC ───────────────────────────────────────────────────────────────────────
-ipcMain.on('save-fences', (_, data) => store.set('fences', data));
-ipcMain.handle('load-fences', () => store.get('fences', null));
-ipcMain.on('save-settings', (_, s) => store.set('settings', s));
-ipcMain.handle('load-settings', () => store.get('settings', { tint: 'warm', blur: 28, opacity: 0.22, cornerRadius: 22 }));
-
-ipcMain.on('set-ignore-mouse', (_, ignore) => {
-  if (!isLocked) mainWindow?.setIgnoreMouseEvents(ignore, { forward: true });
+app.whenReady().then(() => {
+  createWindow();
+  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
-// Scan installed apps
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('will-quit', () => { unregisterShortcuts(); });
+
+if (process.argv.includes('--hidden')) {
+  app.on('ready', () => {
+    if (mainWindow) mainWindow.hide();
+  });
+}
+
+ipcMain.on('save-fences', (_, data) => saveFences(data));
+ipcMain.handle('load-fences', () => loadFences());
+ipcMain.on('save-settings', (_, s) => saveSettings(s));
+ipcMain.handle('load-settings', () => loadSettings());
+
+ipcMain.on('set-ignore-mouse', (_, ignore) => {
+  if (mainWindow) mainWindow.setIgnoreMouseEvents(ignore, { forward: true });
+});
+
 ipcMain.handle('scan-apps', () => scanApps());
 
-// Get native file/app icon as base64 dataURL
 ipcMain.handle('get-file-icon', async (_, appPath) => {
   try {
     const icon = await app.getFileIcon(appPath, { size: 'large' });
@@ -189,29 +82,6 @@ ipcMain.handle('get-file-icon', async (_, appPath) => {
   }
 });
 
-// Launch app
 ipcMain.on('launch-app', (_, appPath) => {
   shell.openPath(appPath).catch(console.error);
 });
-
-// ── Init ──────────────────────────────────────────────────────────────────────
-app.whenReady().then(() => {
-  createWindow();
-  createTray();
-  registerGlobalShortcut();
-  setAutoLaunch(true);
-
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
-});
-
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-
-app.on('will-quit', () => {
-  globalShortcut.unregisterAll();
-});
-
-if (process.argv.includes('--hidden')) {
-  app.on('ready', () => {
-    if (mainWindow) mainWindow.hide();
-  });
-}
