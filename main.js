@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, shell, Tray, Menu, globalShortcut, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -6,6 +6,7 @@ const Store = require('electron-store');
 
 const store = new Store();
 let mainWindow;
+let tray;
 let isLocked = false;
 
 // ── App scanning ──────────────────────────────────────────────────────────────
@@ -76,6 +77,7 @@ function createWindow() {
     resizable: false,
     hasShadow: false,
     focusable: true,
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -87,6 +89,80 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
   mainWindow.setIgnoreMouseEvents(false);
   mainWindow.on('closed', () => { mainWindow = null; });
+  mainWindow.on('close', e => {
+    if (!app.isQuitting) {
+      e.preventDefault();
+      mainWindow.hide();
+    }
+  });
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+}
+
+// ── Tray ─────────────────────────────────────────────────────────────────────
+function createTray() {
+  const iconPath = path.join(__dirname, 'src', 'tray-icon.png');
+  let trayIcon;
+
+  if (fs.existsSync(iconPath)) {
+    trayIcon = nativeImage.createFromPath(iconPath);
+  } else {
+    trayIcon = nativeImage.createEmpty();
+  }
+
+  if (process.platform === 'win32') {
+    trayIcon = trayIcon.resize({ width: 16, height: 16 });
+  }
+
+  tray = new Tray(trayIcon);
+  tray.setToolTip('Liquid Glass Fences');
+
+  const contextMenu = Menu.buildFromTemplate([
+    { label: 'Show/Hide', click: () => toggleWindow() },
+    { type: 'separator' },
+    { label: 'Always on Top', type: 'checkbox', checked: false, click: (item) => {
+      if (mainWindow) mainWindow.setAlwaysOnTop(item.checked);
+    }},
+    { type: 'separator' },
+    { label: 'Quit', click: () => {
+      app.isQuitting = true;
+      app.quit();
+    }}
+  ]);
+
+  tray.setContextMenu(contextMenu);
+  tray.on('click', () => toggleWindow());
+}
+
+function toggleWindow() {
+  if (mainWindow) {
+    if (mainWindow.isVisible()) {
+      mainWindow.hide();
+    } else {
+      mainWindow.show();
+    }
+  }
+}
+
+// ── Global Shortcut ─────────────────────────────────────────────────────────
+function registerGlobalShortcut() {
+  const ret = globalShortcut.register('CommandOrControl+Shift+F', () => {
+    toggleWindow();
+  });
+
+  if (!ret) {
+    console.log('Global shortcut registration failed');
+  }
+}
+
+// ── Auto-start ───────────────────────────────────────────────────────────────
+function setAutoLaunch(enable) {
+  app.setLoginItemSettings({
+    openAtLogin: enable,
+    path: process.execPath,
+    args: ['--hidden']
+  });
 }
 
 // ── IPC ───────────────────────────────────────────────────────────────────────
@@ -120,7 +196,21 @@ ipcMain.on('launch-app', (_, appPath) => {
 // ── Init ──────────────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
   createWindow();
+  createTray();
+  registerGlobalShortcut();
+  setAutoLaunch(true);
+
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+});
+
+if (process.argv.includes('--hidden')) {
+  app.on('ready', () => {
+    if (mainWindow) mainWindow.hide();
+  });
+}
