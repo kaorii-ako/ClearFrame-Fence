@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Liquid Glass Fences</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Settings Panel -->
+<div id="settings-panel" class="settings-panel hidden">
+  <div class="settings-inner">
+    <div class="settings-header">
+      <span class="settings-title">Settings</span>
+      <button class="close-btn" id="close-settings">✕</button>
+    </div>
+    <label class="setting-row">
+      <span>Glass Tint</span>
+      <select id="setting-tint">
+        <option value="warm">Warm (Coral/Orange)</option>
+        <option value="cool">Cool (Blue/Purple)</option>
+        <option value="neutral">Neutral (White/Gray)</option>
+        <option value="rose">Rose (Pink)</option>
+        <option value="sage">Sage (Green)</option>
+      </select>
+    </label>
+    <label class="setting-row">
+      <span>Blur Strength</span>
+      <input type="range" id="setting-blur" min="8" max="60" value="28">
+      <span id="blur-val">28</span>px
+    </label>
+    <label class="setting-row">
+      <span>Glass Opacity</span>
+      <input type="range" id="setting-opacity" min="5" max="60" value="22">
+      <span id="opacity-val">22</span>%
+    </label>
+    <label class="setting-row">
+      <span>Corner Radius</span>
+      <input type="range" id="setting-radius" min="8" max="40" value="22">
+      <span id="radius-val">22</span>px
+    </label>
+    <div class="settings-footer">
+      <button id="add-fence-btn" class="pill-btn">+ New Fence</button>
+      <button id="save-settings-btn" class="pill-btn primary">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Context Menu -->
+<div id="ctx-menu" class="ctx-menu hidden">
+  <div class="ctx-item" data-action="rename">✏️ Rename Fence</div>
+  <div class="ctx-item" data-action="add-icon">➕ Add App</div>
+  <div class="ctx-item" data-action="clear">🗑️ Clear Icons</div>
+  <div class="ctx-divider"></div>
+  <div class="ctx-item danger" data-action="delete">✕ Delete Fence</div>
+</div>
+
+<!-- App Picker Modal -->
+<div id="app-picker" class="app-picker hidden">
+  <div class="picker-inner">
+    <div class="picker-header">
+      <span>Add App</span>
+      <button class="close-btn" id="close-picker">✕</button>
+    </div>
+    <input type="text" id="app-search" placeholder="Search apps..." class="picker-input" autocomplete="off">
+    <div id="app-list" class="app-list">
+      <div class="app-loading">Scanning apps...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Fences root -->
+<div id="fences-root"></div>
+
+<!-- Gear FAB -->
+<button id="settings-fab" title="Settings">⚙</button>
+
+<script src="renderer.js"></script>
+</body>
+</html>
