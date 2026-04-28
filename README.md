@@ -2,8 +2,6 @@
 
 A beautiful, frosted-glass desktop icon organizer inspired by Stardock Fences — built with Electron. Fences float transparently over your wallpaper with a warm liquid glass aesthetic.
 
-![Liquid Glass Fences](https://i.imgur.com/placeholder.png)
-
 ---
 
 ## ✨ Features
