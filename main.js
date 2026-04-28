@@ -15,7 +15,7 @@ function createWindow() {
     width, height, x: 0, y: 0,
     transparent: true,
     frame: false,
-    alwaysOnTop: false,
+    alwaysOnTop: true,
     skipTaskbar: true,
     resizable: false,
     hasShadow: false,
@@ -29,18 +29,19 @@ function createWindow() {
     },
   });
 
+  if (process.platform === 'win32') {
+    mainWindow.setExcludeFromScreenCapture(true);
+  }
+
   if (process.platform === 'darwin') mainWindow.setWindowButtonVisibility(false);
   mainWindow.loadFile(path.join(__dirname, 'src', 'renderer', 'index.html'));
-  mainWindow.setIgnoreMouseEvents(false);
+  mainWindow.setIgnoreMouseEvents(true, { forward: true });
   mainWindow.on('closed', () => { mainWindow = null; });
   mainWindow.on('close', e => {
     if (!app.isQuitting) {
       e.preventDefault();
       mainWindow.hide();
     }
-  });
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
   });
 
   createTray(mainWindow);
