@@ -20,7 +20,7 @@ function createWindow() {
     resizable: false,
     hasShadow: false,
     focusable: true,
-    show: false,
+    show: true,
     title: '',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
